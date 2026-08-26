@@ -1,0 +1,13 @@
+# TypeSpec
+spec/node_modules/
+spec/tsp-output/
+
+# Rust
+backend/target/
+
+# Env
+.env
+
+# OS / editors
+.DS_Store
+*.swp
