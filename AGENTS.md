@@ -38,8 +38,17 @@ spec/                    # TypeSpec-контракт (ИСТОЧНИК ПРАВ�
   package.json           # зависимости typespec
   openapi/openapi.yaml   # сгенерированный OpenAPI (артефакт, коммитится)
   tsp-output/            # промежуточный вывод компилятора (в .gitignore)
+frontend/                # vanilla HTML/JS (без сборщиков)
+  index.html             # страница гостя
+  admin.html             # страница владельца
+  css/styles.css
+  js/api.js              # API-клиент по контракту (без DOM, работает и в Node)
+  js/format.js           # форматирование дат: UTC → локальное время (Intl)
+  js/app.js              # логика страницы гостя
+  js/admin.js            # логика страницы владельца
+  smoke-test.mjs         # smoke-тест API-клиента (node frontend/smoke-test.mjs [baseUrl])
+tools/                   # dev-инструменты (prism-мок), node_modules в .gitignore
 backend/                 # (предстоит) Rust + axum
-frontend/                # (предстоит) vanilla HTML/JS
 docker/                  # (предстоит) Dockerfile, docker-compose.yml
 ```
 
@@ -51,7 +60,25 @@ cd spec && npm run compile        # tsp compile + копирует в openapi/op
 
 # Установка зависимостей контракта (первый раз):
 cd spec && npm install
+
+# Мок API по контракту (Prism), порт 4010:
+cd tools && npx prism mock ../spec/openapi/openapi.yaml -p 4010
+
+# Статика фронтенда (любой статик-сервер), например порт 8080:
+cd frontend && python3 -m http.server 8080
+
+# Smoke-тест API-клиента против мока или реального бэкенда:
+node frontend/smoke-test.mjs [baseUrl]   # по умолчанию http://127.0.0.1:4010
 ```
+
+## Как запустить фронтенд против мока (dev без бэкенда)
+
+1. Терминал 1: `cd tools && npx prism mock ../spec/openapi/openapi.yaml -p 4010`
+2. Терминал 2: `cd frontend && python3 -m http.server 8080`
+3. В консоли браузера на странице: `localStorage.setItem('apiBase', 'http://127.0.0.1:4010')` и обновить страницу.
+4. Для admin.html: токен любой (мок не проверяет значение). Против реального бэкенда — значение `OWNER_TOKEN`.
+
+В проде (Docker) axum раздаёт статику с того же origin — `apiBase` не нужен (по умолчанию пустая строка = тот же origin).
 
 ## API-контракт (сводка)
 
@@ -80,8 +107,8 @@ cd spec && npm install
 ## Прогресс
 
 - [x] Этап 0–1: TypeSpec-контракт написан и скомпилирован (`spec/`), покрытие сценариев проверено
+- [x] Этап 4: Frontend (`index.html` для гостя, `admin.html` для владельца), проверен против Prism-мока (smoke-test.mjs: 15 ok)
 - [ ] Этап 2: БД и миграции (sqlx, таблицы `event_types`, `bookings` с unique по `start`)
 - [ ] Этап 3: Backend (axum: хендлеры, генерация слотов, X-Owner-Token middleware, ServeDir для статики)
-- [ ] Этап 4: Frontend (`index.html` для гостя, `admin.html` для владельца)
 - [ ] Этап 5: Тесты (cargo test: генерация слотов, 409-конфликт, валидация, 401)
 - [ ] Этап 6: Деплой (Dockerfile multi-stage, docker-compose с postgres)

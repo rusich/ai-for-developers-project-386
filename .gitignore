@@ -2,6 +2,9 @@
 spec/node_modules/
 spec/tsp-output/
 
+# Dev-инструменты
+tools/node_modules/
+
 # Rust
 backend/target/
 
