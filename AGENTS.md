@@ -54,29 +54,31 @@ docker/                  # (предстоит) Dockerfile, docker-compose.yml
 
 ## Команды
 
+Основной способ — через `just` (justfile в корне, `just --list` покажет все команды):
+
 ```bash
-# Перекомпиляция контракта (после правок main.tsp):
-cd spec && npm run compile        # tsp compile + копирует в openapi/openapi.yaml
+just dev            # мок API (4010) + статика фронта (8080) одной командой, Ctrl+C гасит оба
+just mock           # только Prism-мок по контракту
+just serve          # только статика фронтенда
+just test-smoke     # smoke-тест API-клиента против мока
+just compile-spec   # перекомпиляция TypeSpec → spec/openapi/openapi.yaml
+just install        # npm install в spec/ и tools/
+```
 
-# Установка зависимостей контракта (первый раз):
-cd spec && npm install
+Без `just` — вручную:
 
-# Мок API по контракту (Prism), порт 4010:
-cd tools && npx prism mock ../spec/openapi/openapi.yaml -p 4010
-
-# Статика фронтенда (любой статик-сервер), например порт 8080:
-cd frontend && python3 -m http.server 8080
-
-# Smoke-тест API-клиента против мока или реального бэкенда:
-node frontend/smoke-test.mjs [baseUrl]   # по умолчанию http://127.0.0.1:4010
+```bash
+cd spec && npm run compile                          # перекомпиляция контракта
+cd tools && npx prism mock ../spec/openapi/openapi.yaml -p 4010   # мок API
+cd frontend && python3 -m http.server 8080          # статика фронта
+node frontend/smoke-test.mjs [baseUrl]              # smoke-тест (по умолчанию :4010)
 ```
 
 ## Как запустить фронтенд против мока (dev без бэкенда)
 
-1. Терминал 1: `cd tools && npx prism mock ../spec/openapi/openapi.yaml -p 4010`
-2. Терминал 2: `cd frontend && python3 -m http.server 8080`
-3. В консоли браузера на странице: `localStorage.setItem('apiBase', 'http://127.0.0.1:4010')` и обновить страницу.
-4. Для admin.html: токен любой (мок не проверяет значение). Против реального бэкенда — значение `OWNER_TOKEN`.
+1. `just dev` (или два терминала: `just mock` + `just serve`)
+2. В консоли браузера на странице: `localStorage.setItem('apiBase', 'http://127.0.0.1:4010')` и обновить страницу.
+3. Для admin.html: токен любой (мок не проверяет значение). Против реального бэкенда — значение `OWNER_TOKEN`.
 
 В проде (Docker) axum раздаёт статику с того же origin — `apiBase` не нужен (по умолчанию пустая строка = тот же origin).
 
