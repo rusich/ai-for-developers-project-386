@@ -56,6 +56,13 @@ backend/                 # Rust + axum (in-memory на этом шаге)
 tools/                   # dev-инструменты, node_modules в .gitignore
   stub-server.mjs        # stateful dev-стаб API на Node (fallback, порт 4010)
   (prism-cli)            # stateless-мок, только для проверки схем OpenAPI
+e2e/                     # интеграционные e2e-тесты (Playwright, реальный браузер)
+  playwright.config.ts   # webServer: бэкенд 3000 + статика 8080, chromium, UTC
+  tests/booking-flow.spec.ts  # основной сценарий бронирования (4 теста, serial)
+  scenarios.md           # описание пользовательских сценариев
+.github/workflows/       # ci.yml (тесты), release-please.yml (релизы), hexlet-check.yml (не трогать)
+release-please-config.json    # конфиг release-please (release-type: simple)
+.release-please-manifest.json # стартовая версия 0.1.0
 docker/                  # (предстоит) Dockerfile, docker-compose.yml
 ```
 
@@ -71,8 +78,10 @@ just stub           # только стаб API на Node (порт 4010, fallba
 just mock           # Prism-мок (stateless, только для проверки схем OpenAPI)
 just serve          # только статика фронтенда
 just test-smoke     # smoke-тест API-клиента против Rust-бэкенда (23 проверки)
+just e2e            # Playwright e2e: собирает бэкенд, поднимает 3000+8080, гоняет браузерные сценарии
+just install-e2e    # установка зависимостей e2e/ + браузер Chromium (нужен один раз)
 just compile-spec   # перекомпиляция TypeSpec → spec/openapi/openapi.yaml
-just install        # npm install в spec/ и tools/
+just install        # npm install в spec/, tools/ и e2e/
 ```
 
 Без `just` — вручную:
@@ -84,6 +93,8 @@ node tools/stub-server.mjs 4010                     # стаб API на Node (fa
 cd frontend && python3 -m http.server 8080          # статика фронта
 node frontend/smoke-test.mjs [baseUrl] [token]      # smoke-тест (по умолчанию :3000, dev-token)
 cd backend && cargo test                            # тесты бэкенда
+cd e2e && npx playwright test                       # e2e-тесты (бэкенд предварительно собран)
+cd e2e && npx playwright install chromium           # браузер для e2e (нужен один раз)
 ```
 
 ## Новая машина (продолжение разработки в новой сессии)
@@ -99,9 +110,11 @@ cd backend && cargo test                            # тесты бэкенда
 ```bash
 git clone git@github.com:rusich/ai-for-developers-project-386.git
 cd ai-for-developers-project-386
-just install        # npm install в spec/ и tools/
+just install        # npm install в spec/, tools/ и e2e/
+just install-e2e    # браузер Chromium для Playwright (нужен один раз)
 just test           # cargo test бэкенда (14 тестов)
 just test-smoke     # smoke-тест API-клиента (23 проверки)
+just e2e            # интеграционные e2e-тесты (4 теста в реальном браузере)
 just dev            # бэкенд 3000 + фронт 8080, Ctrl+C гасит оба
 ```
 
@@ -116,6 +129,28 @@ WRAPPER="$SYSROOT/lib/rustlib/x86_64-unknown-linux-gnu/bin/gcc-ld/ld.lld"
 UNWRAPPED="$SYSROOT/lib/rustlib/x86_64-unknown-linux-gnu/bin/gcc-ld-unwrapped/ld.lld"
 printf '#!/usr/bin/env bash\nexec "%s" "$@"\n' "$UNWRAPPED" > "$WRAPPER"
 chmod +x "$WRAPPER"
+```
+
+**Известный баг окружения (NixOS, сломанный тулчейн):** если любой вызов `cargo`/`rustc`
+падает с `error: command failed: 'cargo': No such file or directory (os error 2)`, а
+`rustup show` пишет `(error reading rustc version)` — бинари тулчейна ссылаются на
+glibc-интерпретатор из Nix-стора, который удалён GC. Проверить: `file
+~/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo` — в выводе будет
+`interpreter /nix/store/...glibc...` и этого пути не существует. Лечится переустановкой
+тулчейна (скачает ~200MB, свежие бинари ссылаются на валидный glibc):
+
+```bash
+rustup toolchain uninstall stable-x86_64-unknown-linux-gnu
+rustup toolchain install stable-x86_64-unknown-linux-gnu
+```
+
+**Известный баг окружения (NixOS + Playwright):** скачанный Playwright-браузер
+не стартует — не хватает системных библиотек (`libglib-2.0.so.0` и др. отсутствуют
+в /nix/store). `just e2e` сам определяет NixOS и подставляет системный Chromium
+(`PLAYWRIGHT_EXECUTABLE_PATH=/run/current-system/sw/bin/chromium`). Вручную:
+
+```bash
+PLAYWRIGHT_EXECUTABLE_PATH=/run/current-system/sw/bin/chromium npx playwright test
 ```
 
 ## Как запустить фронтенд против Rust-бэкенда (dev)
@@ -157,6 +192,26 @@ chmod +x "$WRAPPER"
 4. Реализация фронта и бэка — строго по контракту, без заглядывания в реализацию другой части.
 5. Docker локально у пользователя пока не установлен — Docker-этап отложен; проверки через cargo/npm локально.
 6. Язык общения с пользователем — **русский**.
+7. **Все коммиты — только по Conventional Commits** (см. «Коммиты и релизы» ниже), в том числе коммиты, которые делает агент.
+
+## Коммиты и релизы (Conventional Commits + release-please)
+
+**Все коммиты — только по спецификации Conventional Commits**:
+
+- `feat:` — новая возможность → **MINOR**
+- `fix:` — исправление бага → **PATCH**
+- `docs:`, `chore:`, `test:`, `refactor:`, `ci:`, `style:`, `perf:`, `build:` — версию не меняют
+- Breaking change: `feat!:` / `fix!:` или строка `BREAKING CHANGE:` в теле → **MAJOR**
+- Формат: `тип(область): описание`, например `feat: add owner dashboard`.
+
+**release-please** (`release-please-config.json`, `.release-please-manifest.json`, стартовая версия `0.1.0`)
+анализирует коммиты на `main` и сам ведёт релизы:
+
+- пуш в `main` → workflow `release-please.yml` создаёт/обновляет **release-PR** с changelog и предложенной версией;
+- мёрдж release-PR → GitHub Release + тег `v<версия>` + changelog;
+- после мёрджа release-please делает авто-коммит `chore(main): release <версия>` — это нормально, трогать его не нужно.
+
+**CI** (`ci.yml`): на каждый push — cargo test + smoke-тест API-клиента + Playwright e2e (реальный Chromium, основной сценарий бронирования).
 
 ## Прогресс
 
@@ -164,5 +219,6 @@ chmod +x "$WRAPPER"
 - [x] Этап 4: Frontend (`index.html` для гостя, `admin.html` для владельца), проверен против stateful-стаба (smoke-test.mjs: 23 ok)
 - [x] Этап 3: Backend (axum + in-memory: 8 эндпоинтов, генерация слотов, X-Owner-Token, CORS, RFC7807)
 - [x] Этап 5: Тесты (cargo test: 4 юнит слотов + 10 интеграционных; smoke-test.mjs против Rust: 23 ok)
+- [x] Этап 7: Интеграционные e2e (Playwright, реальный Chromium, основной сценарий бронирования) + CI + release-please
 - [ ] Этап 2: БД и миграции (sqlx, таблицы `event_types`, `bookings` с unique по `start`) — отложено на деплой
 - [ ] Этап 6: Деплой (Dockerfile multi-stage, docker-compose с postgres)
