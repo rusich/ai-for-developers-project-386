@@ -86,6 +86,38 @@ node frontend/smoke-test.mjs [baseUrl] [token]      # smoke-тест (по ум�
 cd backend && cargo test                            # тесты бэкенда
 ```
 
+## Новая машина (продолжение разработки в новой сессии)
+
+Вся разработка ведётся через ИИ-агентов в новых сессиях; сессия не сохраняется.
+Контекст для продолжения: `AGENTS.md` (этот файл) + история коммитов. Код, решения
+и команды зафиксированы здесь и в git — отдельный экспорт сессии не нужен.
+
+**Требования к окружению:** Rust stable, Node ≥ 20 + npm, `just`, python3.
+
+**Установка с нуля:**
+
+```bash
+git clone git@github.com:rusich/ai-for-developers-project-386.git
+cd ai-for-developers-project-386
+just install        # npm install в spec/ и tools/
+just test           # cargo test бэкенда (14 тестов)
+just test-smoke     # smoke-тест API-клиента (23 проверки)
+just dev            # бэкенд 3000 + фронт 8080, Ctrl+C гасит оба
+```
+
+Продолжить с незакрытых пунктов чеклиста «Прогресс» (ниже): БД/миграции и деплой.
+
+**Известный баг окружения (NixOS + rustup):** если `cargo build` падает с
+`ld-wrapper.sh: No such file or directory`, обёртка lld в rustup сломана. Заменить её:
+
+```bash
+SYSROOT=$(rustc --print sysroot)
+WRAPPER="$SYSROOT/lib/rustlib/x86_64-unknown-linux-gnu/bin/gcc-ld/ld.lld"
+UNWRAPPED="$SYSROOT/lib/rustlib/x86_64-unknown-linux-gnu/bin/gcc-ld-unwrapped/ld.lld"
+printf '#!/usr/bin/env bash\nexec "%s" "$@"\n' "$UNWRAPPED" > "$WRAPPER"
+chmod +x "$WRAPPER"
+```
+
 ## Как запустить фронтенд против Rust-бэкенда (dev)
 
 1. `just dev` (или два терминала: `just backend` + `just serve`)
