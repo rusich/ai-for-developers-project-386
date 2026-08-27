@@ -29,7 +29,7 @@
 | Ошибки | Единый формат **RFC7807**: `{ type, title, status, detail }` |
 | Хранилище на шаге «Бэкенд» | **In-memory** (по заданию шага: БД не нужна, данные сбрасываются при перезапуске). Postgres + sqlx — отложено на этап деплоя |
 | Порт бэкенда | **3000** (axum default); dev-стаб на Node — порт 4010 (fallback) |
-| Деплой | Один Docker-контейнер: **axum раздаёт и API, и статику** (без отдельного nginx); postgres в docker-compose |
+| Деплой | Один Docker-контейнер: **axum раздаёт и API, и статику** (без отдельного nginx); прод: Railway (деплой из GitHub по `docker/Dockerfile`, запуск по `PORT`, `OWNER_TOKEN=dev-token`); публичная ссылка в README |
 
 ## Структура репозитория
 
@@ -63,7 +63,7 @@ e2e/                     # интеграционные e2e-тесты (Playwrig
 .github/workflows/       # ci.yml (тесты), release-please.yml (релизы), hexlet-check.yml (не трогать)
 release-please-config.json    # конфиг release-please (release-type: simple)
 .release-please-manifest.json # стартовая версия 0.1.0
-docker/                  # (предстоит) Dockerfile, docker-compose.yml
+docker/                  # Dockerfile (multi-stage), docker-compose.yml, .dockerignore в корне
 ```
 
 ## Команды
@@ -82,6 +82,8 @@ just e2e            # Playwright e2e: собирает бэкенд, подни�
 just install-e2e    # установка зависимостей e2e/ + браузер Chromium (нужен один раз)
 just compile-spec   # перекомпиляция TypeSpec → spec/openapi/openapi.yaml
 just install        # npm install в spec/, tools/ и e2e/
+just docker-build   # сборка Docker-образа (context = корень репо)
+just docker-run     # запуск контейнера (порт 3000, токен: dev-token)
 ```
 
 Без `just` — вручную:
@@ -118,7 +120,7 @@ just e2e            # интеграционные e2e-тесты (4 теста 
 just dev            # бэкенд 3000 + фронт 8080, Ctrl+C гасит оба
 ```
 
-Продолжить с незакрытых пунктов чеклиста «Прогресс» (ниже): БД/миграции и деплой.
+Продолжить с незакрытых пунктов чеклиста «Прогресс» (ниже): БД/миграции.
 
 **Известный баг окружения (NixOS + rustup):** если `cargo build` падает с
 `ld-wrapper.sh: No such file or directory`, обёртка lld в rustup сломана. Заменить её:
@@ -220,5 +222,5 @@ PLAYWRIGHT_EXECUTABLE_PATH=/run/current-system/sw/bin/chromium npx playwright te
 - [x] Этап 3: Backend (axum + in-memory: 8 эндпоинтов, генерация слотов, X-Owner-Token, CORS, RFC7807)
 - [x] Этап 5: Тесты (cargo test: 4 юнит слотов + 10 интеграционных; smoke-test.mjs против Rust: 23 ok)
 - [x] Этап 7: Интеграционные e2e (Playwright, реальный Chromium, основной сценарий бронирования) + CI + release-please
+- [x] Этап 6: Деплой (Dockerfile multi-stage в `docker/`, axum раздаёт API+статику, запуск по `PORT`) — задеплоено на Railway, ссылка в README
 - [ ] Этап 2: БД и миграции (sqlx, таблицы `event_types`, `bookings` с unique по `start`) — отложено на деплой
-- [ ] Этап 6: Деплой (Dockerfile multi-stage, docker-compose с postgres)
