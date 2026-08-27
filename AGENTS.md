@@ -56,6 +56,7 @@ backend/                 # Rust + axum (in-memory), раздаёт API + ста�
   # build_app(state, STATIC_DIR) — API + статика фронтенда (прод/Docker);
   # build_router(state) — только API, без статики (используется в тестах)
   tests/api.rs           # 11 интеграционных тестов + 4 юнит-теста слотов
+  CHANGELOG.md           # changelog релизов (ведёт release-please)
 tools/                   # dev-инструменты, node_modules в .gitignore
   stub-server.mjs        # stateful dev-стаб API на Node (fallback, порт 4010)
   (prism-cli)            # stateless-мок, только для проверки схем OpenAPI
@@ -223,7 +224,8 @@ PLAYWRIGHT_EXECUTABLE_PATH=/run/current-system/sw/bin/chromium npx playwright te
 
 - пуш в `main` → workflow `release-please.yml` создаёт/обновляет **release-PR** с changelog и предложенной версией;
 - `release-type: rust` поднимает `version` в `backend/Cargo.toml` и `backend/Cargo.lock` в том же PR — версия везде синхронна (бэкенд отдаёт её через `GET /api/version`, фронт показывает в подвале);
-- мёрдж release-PR → GitHub Release + тег `v<версия>` + changelog;
+- компонент релиза — crate `call-booking-backend` (имя из Cargo.toml), поэтому release-PR и теги имеют вид `chore(main): release call-booking-backend 0.x.y` и `call-booking-backend-v0.x.y` (`include-component-in-tag: true`); changelog лежит в `backend/CHANGELOG.md`;
+- мёрдж release-PR → GitHub Release + тег + changelog;
 - после мёрджа release-please делает авто-коммит `chore(main): release <версия>` — это нормально, трогать его не нужно.
 
 **CI** (`ci.yml`): на каждый push — cargo test + smoke-тест API-клиента + Playwright e2e (реальный Chromium, основной сценарий бронирования).
