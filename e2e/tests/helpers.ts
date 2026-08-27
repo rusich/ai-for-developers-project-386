@@ -3,7 +3,7 @@
 // перед загрузкой страницы прописываем localStorage.apiBase
 // (как это делает разработчик в консоли браузера). Заодно e2e проверяет CORS.
 
-import type { Page } from '@playwright/test';
+import { expect, type Page } from '@playwright/test';
 
 export const API_BASE = 'http://127.0.0.1:3000';
 export const OWNER_TOKEN = 'dev-token';
@@ -14,6 +14,24 @@ export async function open(page: Page, path: string): Promise<void> {
     localStorage.setItem('apiBase', base);
   }, API_BASE);
   await page.goto(path);
+}
+
+// Выбирает тип события и возвращает локатор первого свободного слота на первом
+// дне, где такие слоты есть. Не полагаемся на то, что у «сегодня» остались
+// будущие слоты (после 18:00 UTC их нет) — иначе тест зависит от времени суток.
+// Возвращает тип Locator.
+export async function selectTypeAndFreeSlot(page: Page, eventTypeTitle: string) {
+  await page.locator('#event-types button', { hasText: eventTypeTitle }).click();
+  await expect(page.locator('#step-slot')).toBeVisible();
+
+  // Ждём загрузки слотов и выбираем первый день, в котором есть свободные слоты.
+  const freeDay = page.locator('#days .day:not(.full)').first();
+  await expect(freeDay).toBeVisible();
+  await freeDay.click();
+
+  const slot = page.locator('#slots .slot:not([disabled])').first();
+  await expect(slot).toBeVisible();
+  return slot;
 }
 
 // Возвращает ISO-start первого свободного слота указанного типа события.

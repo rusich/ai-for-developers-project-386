@@ -3,7 +3,7 @@
 // поэтому тесты идут в serial-режиме: каждый следующий опирается на данные предыдущего.
 
 import { test, expect } from '@playwright/test';
-import { open, firstFreeSlotStart, bookViaApi } from './helpers';
+import { open, selectTypeAndFreeSlot, firstFreeSlotStart, bookViaApi } from './helpers';
 
 test.describe.configure({ mode: 'serial' });
 
@@ -32,11 +32,7 @@ test('гость: видит тип события → выбирает слот
   await open(page, '/');
 
   await expect(page.locator('#event-types')).toContainText(EVENT_TYPE_TITLE);
-  await page.locator('#event-types button', { hasText: EVENT_TYPE_TITLE }).click();
-  await expect(page.locator('#step-slot')).toBeVisible();
-
-  const slot = page.locator('#slots .slot:not([disabled])').first();
-  await expect(slot).toBeVisible();
+  const slot = await selectTypeAndFreeSlot(page, EVENT_TYPE_TITLE);
   await slot.click();
   await expect(page.locator('#step-form')).toBeVisible();
 
@@ -51,16 +47,17 @@ test('гость: видит тип события → выбирает слот
 test('гость: бронирование уже занятого времени → ошибка 409 в UI', async ({ page }) => {
   await open(page, '/');
 
-  await page.locator('#event-types button', { hasText: EVENT_TYPE_TITLE }).click();
-  await expect(page.locator('#step-slot')).toBeVisible();
+  // Выбираем тип и ждём, пока слоты отрисуются и первый свободный станет видимым.
+  // Это важно сделать ДО бронирования «конкурентом»: иначе страница может
+  // отрисовать слот уже занятым (disabled) и в списке не останется свободных.
+  const slot = await selectTypeAndFreeSlot(page, EVENT_TYPE_TITLE);
 
   // Другой гость бронирует тот же первый свободный слот через API,
   // пока текущий гость уже видит его доступным на экране.
   const start = await firstFreeSlotStart(page, EVENT_TYPE_TITLE);
   await bookViaApi(page, EVENT_TYPE_TITLE, start);
 
-  const slot = page.locator('#slots .slot:not([disabled])').first();
-  await expect(slot).toBeVisible();
+  // UI не перерисовался, поэтому слот всё ещё активен — кликаем его и получаем 409.
   await slot.click();
   await page.locator('#booking-form input[name="attendeeName"]').fill('Мария Иванова');
   await page.locator('#booking-form input[name="attendeeEmail"]').fill('maria@example.com');
