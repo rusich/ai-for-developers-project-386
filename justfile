@@ -26,6 +26,15 @@ serve:
 dev:
     #!/usr/bin/env bash
     set -euo pipefail
+    # освобождаем порты, если остались висящие процессы от прошлого запуска
+    for port in 4010 8080; do
+        pids=$(lsof -ti tcp:$port 2>/dev/null || true)
+        if [ -n "$pids" ]; then
+            echo "  Порт $port занят (pid: $pids) — завершаю."
+            kill $pids 2>/dev/null || true
+            sleep 1
+        fi
+    done
     node tools/stub-server.mjs 4010 &
     STUB_PID=$!
     cd frontend && python3 -m http.server 8080 &> /dev/null &
