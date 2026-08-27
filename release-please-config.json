@@ -2,7 +2,6 @@
   "packages": {
     "backend": {
       "release-type": "rust",
-      "changelog-path": "../CHANGELOG.md",
       "changelog-sections": [
         { "type": "feat", "section": "Features" },
         { "type": "fix", "section": "Bug Fixes" },
