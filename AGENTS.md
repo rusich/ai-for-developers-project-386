@@ -30,7 +30,7 @@
 | Хранилище | **In-memory** (данные сбрасываются при перезапуске/деплое). Postgres + sqlx — **отложено**, начинать только когда задание явно потребует БД |
 | Переменные окружения | `PORT` (default 3000), `OWNER_TOKEN` (default dev-token), `STATIC_DIR` (default frontend) |
 | Порт бэкенда | **3000** (axum default); dev-стаб на Node — порт 4010 (fallback) |
-| Деплой | Один Docker-контейнер: **axum раздаёт и API, и статику** (без отдельного nginx); прод: Railway, деплой **ручной** (`railway up` из корня репо, сборка по `docker/Dockerfile`, запуск по `PORT`, `OWNER_TOKEN=dev-token`); публичная ссылка в README |
+| Деплой | Один Docker-контейнер: **axum раздаёт и API, и статику** (без отдельного nginx); прод: Railway, деплой **ручной** (`railway up` из корня репо, сборка по `Dockerfile`, запуск по `PORT`, `OWNER_TOKEN=dev-token`); публичная ссылка в README |
 
 ## Структура репозитория
 
@@ -67,7 +67,9 @@ e2e/                     # интеграционные e2e-тесты (Playwrig
 .github/workflows/       # ci.yml (тесты), release-please.yml (релизы), hexlet-check.yml (не трогать)
 release-please-config.json    # конфиг release-please (release-type: simple)
 .release-please-manifest.json # стартовая версия 0.1.0
-docker/                  # Dockerfile (multi-stage), docker-compose.yml, .dockerignore в корне
+Dockerfile                 # multi-stage: Rust-бинарь + статика фронтенда
+docker-compose.yml         # локальный запуск из Docker-образа
+.dockerignore              # контекст сборки — корень репозитория
 ```
 
 ## Команды
@@ -180,7 +182,7 @@ PLAYWRIGHT_EXECUTABLE_PATH=/run/current-system/sw/bin/chromium npx playwright te
 - **Публичная ссылка:** https://ai-for-developers-project-386-production-6607.up.railway.app (гость), `/admin.html` (владелец, токен `dev-token`)
 - Деплой **ручной** (автодеплой не настроен: на GitHub-репозитории нет вебхука Railway). После того как код на `main` и локально подтянут (`git fetch` + локальный main = origin/main), из корня репо:
   `railway up -p 736cb113-e32d-4e75-8836-73c6657a5bc2 -s ai-for-developers-project-386 -e production -y -d`
-  — загружает локальный каталог, собирает по `docker/Dockerfile`, запуск по `PORT`, `OWNER_TOKEN=dev-token`.
+  — загружает локальный каталог, собирает по `Dockerfile`, запуск по `PORT`, `OWNER_TOKEN=dev-token`.
 - `railway_redeploy` (MCP) переиспользует **старую сборку** — для выката нового кода не годится, только `railway up`.
 - Railway: проект `call-booking`, сервис `ai-for-developers-project-386`. Railway MCP подключён в окружении (глобальный `opencode.json`): логи/деплои/статус — через MCP-инструменты `railway_*`.
 - Сеть пользователя блокирует домен без VPN — для проверок прод-ссылки включать VPN.
@@ -208,7 +210,7 @@ PLAYWRIGHT_EXECUTABLE_PATH=/run/current-system/sw/bin/chromium npx playwright te
 2. TypeSpec v1.15: декораторы с аргументами требуют скобок (`@header("X-Owner-Token")`), объектные аргументы — через `#{}` (`@service(#{title: ...})`), версия API — через `@info(#{version: ...})` из `@typespec/openapi`.
 3. Список-эндпоинты возвращают `200` с `[]` при пустом результате (НЕ 404).
 4. Реализация фронта и бэка — строго по контракту, без заглядывания в реализацию другой части.
-5. Docker локально установлен (`just docker-build` / `just docker-run`); прод-деплой — ручной `railway up` по `docker/Dockerfile` (см. «Продакшн (Railway)»).
+5. Docker локально установлен (`just docker-build` / `just docker-run`); прод-деплой — ручной `railway up` по `Dockerfile` (см. «Продакшн (Railway)»).
 6. Язык общения с пользователем — **русский**.
 7. **Все коммиты — только по Conventional Commits** (см. «Коммиты и релизы» ниже), в том числе коммиты, которые делает агент.
 
@@ -240,5 +242,5 @@ PLAYWRIGHT_EXECUTABLE_PATH=/run/current-system/sw/bin/chromium npx playwright te
 - [x] Этап 3: Backend (axum + in-memory: 9 эндпоинтов, генерация слотов, X-Owner-Token, CORS, RFC7807)
 - [x] Этап 5: Тесты (cargo test: 4 юнит слотов + 11 интеграционных; smoke-test.mjs против Rust: 24 ok)
 - [x] Этап 7: Интеграционные e2e (Playwright, реальный Chromium, основной сценарий бронирования) + CI + release-please
-- [x] Этап 6: Деплой (Dockerfile multi-stage в `docker/`, axum раздаёт API+статику, запуск по `PORT`) — задеплоено на Railway, ссылка в README
+- [x] Этап 6: Деплой (Dockerfile multi-stage в корне, axum раздаёт API+статику, запуск по `PORT`) — задеплоено на Railway, ссылка в README
 - [ ] Этап 2: БД и миграции (sqlx, таблицы `event_types`, `bookings` с unique по `start`) — **отложено**, начинать только когда задание курса явно потребует БД

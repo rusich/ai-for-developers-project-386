@@ -11,11 +11,11 @@
 - **Гость (бронирование):** https://ai-for-developers-project-386-production-6607.up.railway.app
 - **Владелец (админка):** https://ai-for-developers-project-386-production-6607.up.railway.app/admin.html — токен `dev-token`
 
-Деплой: Railway, из GitHub по `docker/Dockerfile` (один контейнер: axum раздаёт и API, и статику). Запуск по порту из `PORT`. Хранилище пока in-memory — данные сбрасываются при каждом деплое.
+Деплой: Railway, из GitHub по `Dockerfile` (один контейнер: axum раздаёт и API, и статику). Запуск по порту из `PORT`. Хранилище пока in-memory — данные сбрасываются при каждом деплое.
 
 ## Docker
 
 ```bash
-just docker-build   # docker build -f docker/Dockerfile -t call-booking .
+just docker-build   # docker build -t call-booking .
 just docker-run     # docker run --rm -p 3000:3000 -e OWNER_TOKEN=dev-token call-booking
 ```

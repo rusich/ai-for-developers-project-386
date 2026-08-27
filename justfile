@@ -91,9 +91,9 @@ dev:
 test-smoke:
     node frontend/smoke-test.mjs http://127.0.0.1:3000
 
-# сборка Docker-образа (context = корень репозитория)
+# сборка Docker-образа (Dockerfile в корне, context = корень репозитория)
 docker-build:
-    docker build -f docker/Dockerfile -t call-booking .
+    docker build -t call-booking .
 
 # запуск контейнера (порт 3000, токен dev-token)
 docker-run:
