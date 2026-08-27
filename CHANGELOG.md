@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.1](https://github.com/rusich/ai-for-developers-project-386/compare/v0.2.0...v0.2.1) (2026-08-27)
+
+
+### Documentation
+
+* add status badges to README ([0df2065](https://github.com/rusich/ai-for-developers-project-386/commit/0df206522bef4f86e87ff6bb4c9569f312de7aad))
+
 ## [0.2.0](https://github.com/rusich/ai-for-developers-project-386/compare/v0.1.0...v0.2.0) (2026-08-27)
 
 
