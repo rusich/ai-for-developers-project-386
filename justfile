@@ -43,12 +43,39 @@ dev:
             sleep 1
         fi
     done
-    cd backend && cargo run &> /tmp/call-booking-backend.log &
+
+    CLEANED=0
+    cleanup() {
+        [ "$CLEANED" -eq 1 ] && return 0
+        CLEANED=1
+        echo ""
+        echo "  Останавливаю бэкенд и фронтенд..."
+        [ -n "${BACKEND_PID:-}" ] && kill "$BACKEND_PID" 2>/dev/null || true
+        [ -n "${SERVE_PID:-}" ] && kill "$SERVE_PID" 2>/dev/null || true
+        sleep 1
+        # страховка: добиваем, если что-то осталось висеть
+        for port in 3000 8080; do
+            pids=$(lsof -ti tcp:$port 2>/dev/null || true)
+            [ -n "$pids" ] && kill -9 $pids 2>/dev/null || true
+        done
+        wait 2>/dev/null || true
+    }
+    # Ctrl+C → останавливаем процессы и выходим с кодом 0,
+    # чтобы just не показывал «recipe failed with exit code 130».
+    trap 'cleanup; exit 0' INT TERM
+    trap cleanup EXIT
+
+    # собираем бинарь заранее и запускаем его НАПРЯМУЮ (без cargo-обёртки),
+    # чтобы $! был PID самого сервера, а не под-оболочки
+    echo "  Сборка бэкенда..."
+    (cd backend && cargo build) &> /tmp/call-booking-backend-build.log
+    ./backend/target/debug/call-booking-backend &> /tmp/call-booking-backend.log &
     BACKEND_PID=$!
-    cd frontend && python3 -m http.server 8080 &> /dev/null &
+
+    python3 -m http.server 8080 --directory frontend &> /dev/null &
     SERVE_PID=$!
-    trap 'kill $BACKEND_PID $SERVE_PID 2>/dev/null || true' EXIT
-    sleep 3
+
+    sleep 2
     echo ''
     echo '  Гость:     http://127.0.0.1:8080'
     echo '  Владелец:  http://127.0.0.1:8080/admin.html  (токен: dev-token)'
