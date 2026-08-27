@@ -1,5 +1,9 @@
-// Smoke-тест API-клиента против Prism-мока (или реального бэкенда).
-// Запуск: node frontend/smoke-test.mjs [baseUrl]   (по умолчанию http://127.0.0.1:4010)
+// Smoke-тест API-клиента против stateful-стаба (tools/stub-server.mjs)
+// или реального бэкенда. Проверяет реальное поведение по контракту,
+// включая сохранение состояния между запросами.
+//
+// Запуск: node frontend/smoke-test.mjs [baseUrl] [ownerToken]
+//         (по умолчанию http://127.0.0.1:4010 и dev-token)
 
 import {
   setApiBaseUrl,
@@ -11,14 +15,13 @@ import {
   getSlots,
   createBooking,
   listBookings,
-  request,
   ApiError,
 } from './js/api.js';
 
 const baseUrl = process.argv[2] || 'http://127.0.0.1:4010';
+const TOKEN = process.argv[3] || 'dev-token';
 setApiBaseUrl(baseUrl);
 
-const TOKEN = 'test-owner-token';
 let passed = 0;
 let failed = 0;
 
@@ -47,100 +50,107 @@ async function expectApiError(name, promise, status) {
   }
 }
 
-// Принудительный выбор кода ответа в Prism-моке (Prefer: code=NNN)
-const preferCode = (code) => ({ Prefer: `code=${code}` });
-
 console.log(`Smoke-тест против ${baseUrl}\n`);
 
-// ── Гость: типы событий ────────────────────────────────────
-const types = await listEventTypes();
-check('GET /api/event-types → массив', Array.isArray(types));
+// ── Владелец: создание типа события сохраняется ────────────
+const before = await listEventTypes();
+check('GET /api/event-types → массив', Array.isArray(before));
+
+const created = await createEventType(TOKEN, {
+  title: 'Консультация',
+  description: 'Разбор вопроса',
+});
+check('POST /api/event-types → возвращает созданный тип', created.title === 'Консультация');
+
+const after = await listEventTypes();
 check(
-  'EventType имеет id/title',
-  types.length === 0 || (typeof types[0].id === 'string' && typeof types[0].title === 'string'),
+  'созданный тип появился в списке (stateful)',
+  after.length === before.length + 1 && after.some((t) => t.id === created.id),
 );
 
-const someId = types[0]?.id ?? 'any-id';
-const single = await getEventType(someId);
-check('GET /api/event-types/{id} → объект с id', typeof single.id === 'string');
+const fetched = await getEventType(created.id);
+check('GET /api/event-types/{id} → тот же тип', fetched.id === created.id && fetched.title === 'Консультация');
 
-// ── Гость: слоты ───────────────────────────────────────────
-const slots = await getSlots(someId);
-check('GET /api/event-types/{id}/slots → массив', Array.isArray(slots));
+const updated = await updateEventType(TOKEN, created.id, { title: 'Стратсессия' });
+check('PUT /api/event-types/{id} → обновляет title', updated.title === 'Стратсессия');
+
+// ── Гость: слоты по правилам контракта ─────────────────────
+const slots = await getSlots(created.id);
+check('GET /slots → массив из 14 дней × 18 слотов = 252', slots.length === 252, `(получено ${slots.length})`);
 check(
-  'Slot имеет start/end/available',
-  slots.length === 0 || (
-    typeof slots[0].start === 'string'
-    && typeof slots[0].end === 'string'
-    && typeof slots[0].available === 'boolean'
-  ),
+  'слоты выровнены по 30 минут, в окне 09:00–18:00 UTC',
+  slots.every((s) => {
+    const start = new Date(s.start);
+    const mins = start.getUTCHours() * 60 + start.getUTCMinutes();
+    return start.getTime() % (30 * 60_000) === 0 && mins >= 540 && mins < 1080;
+  }),
+);
+check(
+  'слоты идут по всем 7 дням недели в окне 14 дней',
+  new Set(slots.map((s) => new Date(s.start).getUTCDay())).size === 7,
 );
 
-const slotsWithFrom = await getSlots(someId, new Date().toISOString());
-check('slots с ?from= → массив', Array.isArray(slotsWithFrom));
+const slotsFrom = await getSlots(created.id, new Date(Date.now() + 7 * 86_400_000).toISOString());
+check('slots с ?from=+7д → окно сдвигается', slotsFrom.length === 252
+  && new Date(slotsFrom[0].start) > new Date(slots[0].start));
 
 // ── Гость: бронирование ────────────────────────────────────
+const freeSlot = slots.find((s) => s.available);
+check('есть хотя бы один свободный слот', Boolean(freeSlot));
+
 const booking = await createBooking({
-  eventTypeId: someId,
-  start: new Date().toISOString(),
+  eventTypeId: created.id,
+  start: freeSlot.start,
   attendeeName: 'Иван Иванов',
   attendeeEmail: 'ivan@example.com',
 });
 check(
-  'POST /api/bookings → Booking с id/start/end',
-  typeof booking.id === 'string'
-    && typeof booking.start === 'string'
-    && typeof booking.end === 'string',
+  'POST /api/bookings → Booking с данными гостя',
+  booking.attendeeName === 'Иван Иванов'
+    && booking.start === freeSlot.start
+    && booking.eventTypeId === created.id,
 );
 
-// ── Владелец: CRUD типов ───────────────────────────────────
-const created = await createEventType(TOKEN, { title: 'Консультация', description: '30 минут' });
-check('POST /api/event-types → созданный тип', typeof created.id === 'string' && typeof created.title === 'string');
+const slotsAfter = await getSlots(created.id);
+const bookedSlot = slotsAfter.find((s) => s.start === freeSlot.start);
+check('забронированный слот стал недоступен', bookedSlot && bookedSlot.available === false);
 
-const updated = await updateEventType(TOKEN, created.id ?? 'x', { title: 'Новое название' });
-check('PUT /api/event-types/{id} → обновлённый тип', typeof updated.id === 'string');
-
-const del = await deleteEventType(TOKEN, created.id ?? 'x');
-check('DELETE /api/event-types/{id} → 204 (null)', del === null);
-
-// ── Владелец: список встреч ────────────────────────────────
-const bookings = await listBookings(TOKEN);
-check('GET /api/bookings → массив', Array.isArray(bookings));
-
-// ── Ошибки по контракту ────────────────────────────────────
-// Prism-мок не валидирует токен и не знает про занятые слоты, поэтому коды ошибок
-// выбираем принудительно через Prefer: code=NNN (запрос при этом должен быть
-// валидным по контракту, иначе Prism ответит своей ошибкой валидации 400/422).
-// Так проверяем, что клиент корректно парсит RFC7807-ответы с каждым статусом.
 await expectApiError(
-  '401 → ApiError с полями type/title/status/detail',
-  request('/api/bookings', { ownerToken: TOKEN, extraHeaders: preferCode(401) }),
-  401,
-);
-await expectApiError(
-  '400 → ApiError с полями type/title/status/detail',
-  request('/api/bookings', { method: 'POST', body: {}, extraHeaders: preferCode(400) }),
-  400,
-);
-await expectApiError(
-  '404 → ApiError с полями type/title/status/detail',
-  request('/api/event-types/some-id', { extraHeaders: preferCode(404) }),
-  404,
-);
-await expectApiError(
-  '409 → ApiError с полями type/title/status/detail',
-  request('/api/bookings', {
-    method: 'POST',
-    body: {
-      eventTypeId: 'some-id',
-      start: new Date().toISOString(),
-      attendeeName: 'Иван',
-      attendeeEmail: 'ivan@example.com',
-    },
-    extraHeaders: preferCode(409),
+  'повторное бронирование того же времени → 409',
+  createBooking({
+    eventTypeId: created.id,
+    start: freeSlot.start,
+    attendeeName: 'Другой Гость',
+    attendeeEmail: 'other@example.com',
   }),
   409,
 );
+
+// ── Владелец: список встреч ────────────────────────────────
+const bookings = await listBookings(TOKEN);
+check(
+  'GET /api/bookings → содержит созданное бронирование',
+  Array.isArray(bookings) && bookings.some((b) => b.id === booking.id),
+);
+
+// ── Ошибки по контракту ────────────────────────────────────
+await expectApiError('POST /api/event-types без токена → 401', createEventType('', { title: 'x' }), 401);
+await expectApiError('POST /api/event-types с неверным токеном → 401', createEventType('wrong', { title: 'x' }), 401);
+await expectApiError('GET /api/bookings без токена → 401', listBookings(''), 401);
+await expectApiError('POST /api/bookings с пустым телом → 400', createBooking({}), 400);
+await expectApiError(
+  'POST /api/bookings с невалидным email → 400',
+  createBooking({ eventTypeId: created.id, start: freeSlot.start, attendeeName: 'Иван', attendeeEmail: 'не-email' }),
+  400,
+);
+await expectApiError('GET /api/event-types/{несуществующий} → 404', getEventType('no-such-id'), 404);
+await expectApiError('GET /slots несуществующего типа → 404', getSlots('no-such-id'), 404);
+
+// ── Владелец: удаление ─────────────────────────────────────
+const del = await deleteEventType(TOKEN, created.id);
+check('DELETE /api/event-types/{id} → 204 (null)', del === null);
+const finalList = await listEventTypes();
+check('удалённый тип исчез из списка', !finalList.some((t) => t.id === created.id));
 
 console.log(`\nИтог: ${passed} ok, ${failed} FAIL`);
 process.exit(failed === 0 ? 0 : 1);

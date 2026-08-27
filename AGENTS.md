@@ -46,8 +46,10 @@ frontend/                # vanilla HTML/JS (без сборщиков)
   js/format.js           # форматирование дат: UTC → локальное время (Intl)
   js/app.js              # логика страницы гостя
   js/admin.js            # логика страницы владельца
-  smoke-test.mjs         # smoke-тест API-клиента (node frontend/smoke-test.mjs [baseUrl])
-tools/                   # dev-инструменты (prism-мок), node_modules в .gitignore
+  smoke-test.mjs         # smoke-тест API-клиента (node frontend/smoke-test.mjs [baseUrl] [token])
+tools/                   # dev-инструменты, node_modules в .gitignore
+  stub-server.mjs        # stateful dev-стаб API по контракту (in-memory, слоты по правилам)
+  (prism-cli)            # stateless-мок, только для проверки схем OpenAPI
 backend/                 # (предстоит) Rust + axum
 docker/                  # (предстоит) Dockerfile, docker-compose.yml
 ```
@@ -57,10 +59,11 @@ docker/                  # (предстоит) Dockerfile, docker-compose.yml
 Основной способ — через `just` (justfile в корне, `just --list` покажет все команды):
 
 ```bash
-just dev            # мок API (4010) + статика фронта (8080) одной командой, Ctrl+C гасит оба
-just mock           # только Prism-мок по контракту
+just dev            # stateful-стаб API (4010) + статика фронта (8080) одной командой, Ctrl+C гасит оба
+just stub           # только стаб API (node tools/stub-server.mjs, токен: dev-token)
+just mock           # Prism-мок (stateless, только для проверки схем OpenAPI)
 just serve          # только статика фронтенда
-just test-smoke     # smoke-тест API-клиента против мока
+just test-smoke     # smoke-тест API-клиента против стаба/бэкенда (23 проверки)
 just compile-spec   # перекомпиляция TypeSpec → spec/openapi/openapi.yaml
 just install        # npm install в spec/ и tools/
 ```
@@ -69,16 +72,18 @@ just install        # npm install в spec/ и tools/
 
 ```bash
 cd spec && npm run compile                          # перекомпиляция контракта
-cd tools && npx prism mock ../spec/openapi/openapi.yaml -p 4010   # мок API
+node tools/stub-server.mjs 4010                     # stateful-стаб API (OWNER_TOKEN=... для смены токена)
 cd frontend && python3 -m http.server 8080          # статика фронта
-node frontend/smoke-test.mjs [baseUrl]              # smoke-тест (по умолчанию :4010)
+node frontend/smoke-test.mjs [baseUrl] [token]      # smoke-тест (по умолчанию :4010, dev-token)
 ```
 
-## Как запустить фронтенд против мока (dev без бэкенда)
+## Как запустить фронтенд против стаба (dev без бэкенда)
 
-1. `just dev` (или два терминала: `just mock` + `just serve`)
+1. `just dev` (или два терминала: `just stub` + `just serve`)
 2. В консоли браузера на странице: `localStorage.setItem('apiBase', 'http://127.0.0.1:4010')` и обновить страницу.
-3. Для admin.html: токен любой (мок не проверяет значение). Против реального бэкенда — значение `OWNER_TOKEN`.
+3. Для admin.html: токен `dev-token` (стаб проверяет значение; задаётся через env `OWNER_TOKEN`).
+
+Стаб (`tools/stub-server.mjs`) — stateful: хранит данные в памяти до перезапуска, генерирует слоты по правилам контракта (30 мин, 09:00–18:00 UTC, 14 дней), выдаёт настоящие 401/400/404/409. Prism оставлен только для проверки схем OpenAPI (он stateless и подставляет случайные строки — для ручной проверки в браузере не подходит).
 
 В проде (Docker) axum раздаёт статику с того же origin — `apiBase` не нужен (по умолчанию пустая строка = тот же origin).
 
@@ -109,7 +114,7 @@ node frontend/smoke-test.mjs [baseUrl]              # smoke-тест (по ум�
 ## Прогресс
 
 - [x] Этап 0–1: TypeSpec-контракт написан и скомпилирован (`spec/`), покрытие сценариев проверено
-- [x] Этап 4: Frontend (`index.html` для гостя, `admin.html` для владельца), проверен против Prism-мока (smoke-test.mjs: 15 ok)
+- [x] Этап 4: Frontend (`index.html` для гостя, `admin.html` для владельца), проверен против stateful-стаба (smoke-test.mjs: 23 ok)
 - [ ] Этап 2: БД и миграции (sqlx, таблицы `event_types`, `bookings` с unique по `start`)
 - [ ] Этап 3: Backend (axum: хендлеры, генерация слотов, X-Owner-Token middleware, ServeDir для статики)
 - [ ] Этап 5: Тесты (cargo test: генерация слотов, 409-конфликт, валидация, 401)
