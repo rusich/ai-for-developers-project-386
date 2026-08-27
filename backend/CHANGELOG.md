@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.3.0](https://github.com/rusich/ai-for-developers-project-386/compare/call-booking-backend-v0.2.1...call-booking-backend-v0.3.0) (2026-08-27)
+
+
+### Features
+
+* add Docker deployment with axum-served static ([99272f2](https://github.com/rusich/ai-for-developers-project-386/commit/99272f27faf63d347c0f755e149ced40074acb66))
+* implement backend in Rust (axum, in-memory) per OpenAPI contract ([3a19bb2](https://github.com/rusich/ai-for-developers-project-386/commit/3a19bb2ab544b743bc12a2e4cf91cebb53d648cf))
+* report app version via GET /api/version ([7a3206f](https://github.com/rusich/ai-for-developers-project-386/commit/7a3206f9c4b56f9e587e74c9f321700997e62dd4))
+
+
+### Build
+
+* keep changelog under backend/ for release-please rust strategy ([421e33a](https://github.com/rusich/ai-for-developers-project-386/commit/421e33a54ac0fc62a8f37afe2803323353f0c3e5))
+
 ## [0.2.1](https://github.com/rusich/ai-for-developers-project-386/compare/v0.2.0...v0.2.1) (2026-08-27)
 
 
