@@ -418,6 +418,17 @@ async fn cors_preflight() {
 }
 
 #[tokio::test]
+async fn version_endpoint_returns_semver() {
+    let router = app();
+
+    let (status, body) = get(&router, "/api/version").await;
+    assert_eq!(status, StatusCode::OK);
+    let v = body["version"].as_str().unwrap();
+    assert_eq!(v, env!("CARGO_PKG_VERSION"));
+    assert!(!v.is_empty());
+}
+
+#[tokio::test]
 async fn invalid_json_body_returns_400() {
     let router = app();
     let response = router

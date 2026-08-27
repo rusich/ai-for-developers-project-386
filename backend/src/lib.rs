@@ -31,6 +31,7 @@ pub fn build_router(state: AppState) -> Router {
         )
         .route("/api/event-types/{id}/slots", get(handlers::get_slots))
         .route("/api/bookings", post(handlers::create_booking).get(handlers::list_bookings))
+        .route("/api/version", get(handlers::get_version))
         .fallback(not_found)
         .layer(from_fn(cors::cors_layer))
         .layer(DefaultBodyLimit::max(64 * 1024))

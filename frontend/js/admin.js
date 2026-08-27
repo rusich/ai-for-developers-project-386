@@ -7,6 +7,7 @@ import {
   updateEventType,
   deleteEventType,
   listBookings,
+  getVersion,
   ApiError,
 } from './api.js';
 import { formatDateTime } from './format.js';
@@ -32,6 +33,7 @@ const els = {
   bookingsTable: document.querySelector('#bookings-table'),
   bookingsBody: document.querySelector('#bookings-table tbody'),
   bookingsEmpty: document.querySelector('#bookings-empty'),
+  appVersion: document.querySelector('#app-version'),
   error: document.querySelector('#error'),
 };
 
@@ -221,6 +223,17 @@ els.logout.addEventListener('click', () => {
   clearError();
 });
 
+// ── Версия ───────────────────────────────────────────────────
+
+async function loadVersion() {
+  try {
+    const info = await getVersion();
+    if (els.appVersion) els.appVersion.textContent = `v${info.version}`;
+  } catch {
+    // Версия не критична — молча пропускаем при недоступном API.
+  }
+}
+
 // ── Старт ────────────────────────────────────────────────────
 
 if (state.token) {
@@ -228,3 +241,4 @@ if (state.token) {
 } else {
   showGate(null);
 }
+loadVersion();

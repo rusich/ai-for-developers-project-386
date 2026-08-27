@@ -101,6 +101,10 @@ export const getSlots = (eventTypeId, from) => {
   return request(`/api/event-types/${encodeURIComponent(eventTypeId)}/slots${query}`);
 };
 
+// ── Version ──────────────────────────────────────────────────
+
+export const getVersion = () => request('/api/version');
+
 // ── Bookings ─────────────────────────────────────────────────
 
 export const createBooking = (payload) =>

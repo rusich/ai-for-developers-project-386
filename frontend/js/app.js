@@ -4,6 +4,7 @@ import {
   listEventTypes,
   getSlots,
   createBooking,
+  getVersion,
   ApiError,
 } from './api.js';
 import {
@@ -36,6 +37,7 @@ const els = {
   backToSlots: document.querySelector('#back-to-slots'),
   confirmation: document.querySelector('#confirmation'),
   bookAnother: document.querySelector('#book-another'),
+  appVersion: document.querySelector('#app-version'),
   error: document.querySelector('#error'),
 };
 
@@ -233,3 +235,13 @@ els.bookAnother.addEventListener('click', () => {
 // ── Старт ────────────────────────────────────────────────────
 
 loadEventTypes();
+
+async function loadVersion() {
+  try {
+    const info = await getVersion();
+    if (els.appVersion) els.appVersion.textContent = `v${info.version}`;
+  } catch {
+    // Версия не критична — молча пропускаем при недоступном API.
+  }
+}
+loadVersion();

@@ -66,3 +66,9 @@ pub struct ErrorBody {
     pub status: u16,
     pub detail: String,
 }
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VersionInfo {
+    pub version: String,
+}

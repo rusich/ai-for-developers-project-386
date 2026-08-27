@@ -11,6 +11,9 @@ import { randomUUID } from 'node:crypto';
 const PORT = Number(process.argv[2] || 4010);
 const OWNER_TOKEN = process.env.OWNER_TOKEN || 'dev-token';
 
+// Версия стаба — совпадает с версией пакета backend (обновляется с релизами).
+const APP_VERSION = '0.2.1';
+
 const SLOT_MINUTES = 30;
 const DAY_START_HOUR_UTC = 9;
 const DAY_END_HOUR_UTC = 18;
@@ -158,6 +161,13 @@ async function handle(req, res) {
   // CORS preflight
   if (req.method === 'OPTIONS') {
     return sendCorsPreflight(req, res);
+  }
+
+  // /api/version
+  if (path === '/api/version') {
+    if (req.method === 'GET') {
+      return sendJson(res, 200, { version: APP_VERSION });
+    }
   }
 
   // /api/event-types

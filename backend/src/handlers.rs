@@ -12,10 +12,14 @@ use uuid::Uuid;
 use crate::auth::check_owner;
 use crate::error::ApiError;
 use crate::models::{
-    Booking, BookingRequest, EventType, EventTypeCreate, EventTypeUpdate,
+    Booking, BookingRequest, EventType, EventTypeCreate, EventTypeUpdate, VersionInfo,
 };
 use crate::slots::{find_slot, generate_slots};
 use crate::state::AppState;
+
+// Версия приложения берётся из Cargo.toml на этапе компиляции;
+// release-please синхронизирует её с релизами (release-type: rust).
+pub const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 #[derive(Debug, Deserialize)]
 pub struct SlotsQuery {
@@ -192,6 +196,14 @@ pub async fn create_booking(
     };
     store.bookings.push(booking.clone());
     Ok(Json(booking).into_response())
+}
+
+// ── Версия ───────────────────────────────────────────────────
+
+pub async fn get_version() -> Json<VersionInfo> {
+    Json(VersionInfo {
+        version: APP_VERSION.to_string(),
+    })
 }
 
 pub async fn list_bookings(

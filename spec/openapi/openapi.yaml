@@ -241,6 +241,18 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+  /api/version:
+    get:
+      operationId: Version_get
+      description: Получить версию приложения
+      parameters: []
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VersionInfo'
 components:
   schemas:
     Booking:
@@ -378,3 +390,12 @@ components:
           type: boolean
           description: true, если слот свободен и доступен для бронирования
       description: Временной слот для бронирования
+    VersionInfo:
+      type: object
+      required:
+        - version
+      properties:
+        version:
+          type: string
+          description: Версия приложения (из Cargo.toml)
+      description: Информация о версии приложения

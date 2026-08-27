@@ -15,6 +15,7 @@ import {
   getSlots,
   createBooking,
   listBookings,
+  getVersion,
   ApiError,
 } from './js/api.js';
 
@@ -55,6 +56,13 @@ console.log(`Smoke-тест против ${baseUrl}\n`);
 // ── Владелец: создание типа события сохраняется ────────────
 const before = await listEventTypes();
 check('GET /api/event-types → массив', Array.isArray(before));
+
+// ── Версия приложения ────────────────────────────────────────
+const versionInfo = await getVersion();
+check(
+  'GET /api/version → версия непустая строка',
+  typeof versionInfo.version === 'string' && versionInfo.version.length > 0,
+);
 
 const created = await createEventType(TOKEN, {
   title: 'Консультация',

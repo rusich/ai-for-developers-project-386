@@ -55,7 +55,7 @@ backend/                 # Rust + axum (in-memory), раздаёт API + ста�
   src/{main,lib,models,state,slots,auth,error,cors,handlers}.rs
   # build_app(state, STATIC_DIR) — API + статика фронтенда (прод/Docker);
   # build_router(state) — только API, без статики (используется в тестах)
-  tests/api.rs           # 10 интеграционных тестов + 4 юнит-теста слотов
+  tests/api.rs           # 11 интеграционных тестов + 4 юнит-теста слотов
 tools/                   # dev-инструменты, node_modules в .gitignore
   stub-server.mjs        # stateful dev-стаб API на Node (fallback, порт 4010)
   (prism-cli)            # stateless-мок, только для проверки схем OpenAPI
@@ -76,11 +76,11 @@ docker/                  # Dockerfile (multi-stage), docker-compose.yml, .docker
 ```bash
 just dev            # Rust-бэкенд (3000) + статика фронта (8080) одной командой, Ctrl+C гасит оба
 just backend        # только Rust-бэкенд (cargo run, порт 3000)
-just test           # cargo test бэкенда (14 тестов)
+just test           # cargo test бэкенда (15 тестов)
 just stub           # только стаб API на Node (порт 4010, fallback, токен: dev-token)
 just mock           # Prism-мок (stateless, только для проверки схем OpenAPI)
 just serve          # только статика фронтенда
-just test-smoke     # smoke-тест API-клиента против Rust-бэкенда (23 проверки)
+just test-smoke     # smoke-тест API-клиента против Rust-бэкенда (24 проверки)
 just e2e            # Playwright e2e: собирает бэкенд, поднимает 3000+8080, гоняет браузерные сценарии
 just install-e2e    # установка зависимостей e2e/ + браузер Chromium (нужен один раз)
 just compile-spec   # перекомпиляция TypeSpec → spec/openapi/openapi.yaml
@@ -117,8 +117,8 @@ git clone git@github.com:rusich/ai-for-developers-project-386.git
 cd ai-for-developers-project-386
 just install        # npm install в spec/, tools/ и e2e/
 just install-e2e    # браузер Chromium для Playwright (нужен один раз)
-just test           # cargo test бэкенда (14 тестов)
-just test-smoke     # smoke-тест API-клиента (23 проверки)
+just test           # cargo test бэкенда (15 тестов)
+just test-smoke     # smoke-тест API-клиента (24 проверки)
 just e2e            # интеграционные e2e-тесты (4 теста в реальном браузере)
 just dev            # бэкенд 3000 + фронт 8080, Ctrl+C гасит оба
 ```
@@ -166,7 +166,7 @@ PLAYWRIGHT_EXECUTABLE_PATH=/run/current-system/sw/bin/chromium npx playwright te
 
 Стаб на Node (`tools/stub-server.mjs`, порт 4010) остаётся fallback'ом, если нужно проверить фронт без компиляции Rust.
 
-**Rust-бэкенд** (`backend/`) — axum + in-memory хранилище, реализует контракт: слоты по правилам (30 мин, 09:00–18:00 UTC, 14 дней), бронирование с 409 на занятое время, owner-эндпоинты через `X-Owner-Token` = env `OWNER_TOKEN` (default `dev-token`), ошибки RFC7807, CORS-слой для dev (preflight 204 + `Access-Control-Allow-Private-Network: true`). В проде **`build_app`** раздаёт и API, и статику фронтенда из `STATIC_DIR` (default `frontend`) с того же origin — отдельный nginx не нужен; `build_router` — только API (используется в тестах). Структура: `models` (DTO по контракту, camelCase), `slots` (генерация), `handlers` (8 эндпоинтов), `error` (RFC7807), `auth` (токен), `cors`, `state` (Mutex<Store>).
+**Rust-бэкенд** (`backend/`) — axum + in-memory хранилище, реализует контракт: слоты по правилам (30 мин, 09:00–18:00 UTC, 14 дней), бронирование с 409 на занятое время, owner-эндпоинты через `X-Owner-Token` = env `OWNER_TOKEN` (default `dev-token`), ошибки RFC7807, CORS-слой для dev (preflight 204 + `Access-Control-Allow-Private-Network: true`). В проде **`build_app`** раздаёт и API, и статику фронтенда из `STATIC_DIR` (default `frontend`) с того же origin — отдельный nginx не нужен; `build_router` — только API (используется в тестах). Структура: `models` (DTO по контракту, camelCase), `slots` (генерация), `handlers` (9 эндпоинтов), `error` (RFC7807), `auth` (токен), `cors`, `state` (Mutex<Store>).
 
 Стаб на Node (`tools/stub-server.mjs`) — fallback-реализация того же контракта для проверки фронта без компиляции Rust. Prism оставлен только для проверки схем OpenAPI (stateless, подставляет случайные строки — для ручной проверки в браузере не подходит).
 
@@ -194,8 +194,9 @@ PLAYWRIGHT_EXECUTABLE_PATH=/run/current-system/sw/bin/chromium npx playwright te
 | GET | `/api/event-types/{id}/slots?from=ISO8601` | гость | слоты на 14 дней (`from` необязателен) |
 | POST | `/api/bookings` | гость | забронировать (тело: `BookingRequest`) |
 | GET | `/api/bookings` | владелец | предстоящие встречи |
+| GET | `/api/version` | все | версия приложения (`{version}` из Cargo.toml) |
 
-Сущности: `EventType{id,title,description?}`, `Slot{start,end,available}`, `Booking{id,eventTypeId,start,end,attendeeName,attendeeEmail}`, `BookingRequest{eventTypeId,start,attendeeName,attendeeEmail}`.
+Сущности: `EventType{id,title,description?}`, `Slot{start,end,available}`, `Booking{id,eventTypeId,start,end,attendeeName,attendeeEmail}`, `BookingRequest{eventTypeId,start,attendeeName,attendeeEmail}`, `VersionInfo{version}`.
 
 ## Важные правила для агентов
 
@@ -217,10 +218,11 @@ PLAYWRIGHT_EXECUTABLE_PATH=/run/current-system/sw/bin/chromium npx playwright te
 - Breaking change: `feat!:` / `fix!:` или строка `BREAKING CHANGE:` в теле → **MAJOR**
 - Формат: `тип(область): описание`, например `feat: add owner dashboard`.
 
-**release-please** (`release-please-config.json`, `.release-please-manifest.json`, стартовая версия `0.1.0`)
+**release-please** (`release-please-config.json`, `.release-please-manifest.json`, `release-type: rust` для пакета `backend`)
 анализирует коммиты на `main` и сам ведёт релизы:
 
 - пуш в `main` → workflow `release-please.yml` создаёт/обновляет **release-PR** с changelog и предложенной версией;
+- `release-type: rust` поднимает `version` в `backend/Cargo.toml` и `backend/Cargo.lock` в том же PR — версия везде синхронна (бэкенд отдаёт её через `GET /api/version`, фронт показывает в подвале);
 - мёрдж release-PR → GitHub Release + тег `v<версия>` + changelog;
 - после мёрджа release-please делает авто-коммит `chore(main): release <версия>` — это нормально, трогать его не нужно.
 
@@ -229,9 +231,9 @@ PLAYWRIGHT_EXECUTABLE_PATH=/run/current-system/sw/bin/chromium npx playwright te
 ## Прогресс
 
 - [x] Этап 0–1: TypeSpec-контракт написан и скомпилирован (`spec/`), покрытие сценариев проверено
-- [x] Этап 4: Frontend (`index.html` для гостя, `admin.html` для владельца), проверен против stateful-стаба (smoke-test.mjs: 23 ok)
-- [x] Этап 3: Backend (axum + in-memory: 8 эндпоинтов, генерация слотов, X-Owner-Token, CORS, RFC7807)
-- [x] Этап 5: Тесты (cargo test: 4 юнит слотов + 10 интеграционных; smoke-test.mjs против Rust: 23 ok)
+- [x] Этап 4: Frontend (`index.html` для гостя, `admin.html` для владельца), проверен против stateful-стаба (smoke-test.mjs: 24 ok)
+- [x] Этап 3: Backend (axum + in-memory: 9 эндпоинтов, генерация слотов, X-Owner-Token, CORS, RFC7807)
+- [x] Этап 5: Тесты (cargo test: 4 юнит слотов + 11 интеграционных; smoke-test.mjs против Rust: 24 ok)
 - [x] Этап 7: Интеграционные e2e (Playwright, реальный Chromium, основной сценарий бронирования) + CI + release-please
 - [x] Этап 6: Деплой (Dockerfile multi-stage в `docker/`, axum раздаёт API+статику, запуск по `PORT`) — задеплоено на Railway, ссылка в README
 - [ ] Этап 2: БД и миграции (sqlx, таблицы `event_types`, `bookings` с unique по `start`) — **отложено**, начинать только когда задание курса явно потребует БД

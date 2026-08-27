@@ -90,6 +90,12 @@ namespace CallBooking {
     attendeeEmail: string;
   }
 
+  @doc("Информация о версии приложения")
+  model VersionInfo {
+    @doc("Версия приложения (из Cargo.toml)")
+    version: string;
+  }
+
   // ── Ошибки (RFC7807-стиль) ───────────────────────────────────
 
   @doc("Ошибка в формате RFC7807 (Problem Details)")
@@ -179,5 +185,11 @@ namespace CallBooking {
     @get list(
       @header("X-Owner-Token") ownerToken: string
     ): Booking[] | UnauthorizedError;
+  }
+
+  @route("/api/version")
+  interface Version {
+    @doc("Получить версию приложения")
+    @get get(): VersionInfo;
   }
 }
