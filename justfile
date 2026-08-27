@@ -10,7 +10,15 @@ install:
 compile-spec:
     cd spec && npm run compile
 
-# Stateful dev-стаб API по контракту (порт 4010)
+# Rust-бэкенд (порт 3000)
+backend:
+    cd backend && cargo run
+
+# тесты бэкенда (cargo test)
+test:
+    cd backend && cargo test
+
+# Stateful dev-стаб API на Node (порт 4010) — fallback, если Rust-бэкенд не нужен
 stub:
     node tools/stub-server.mjs 4010
 
@@ -22,12 +30,12 @@ mock:
 serve:
     cd frontend && python3 -m http.server 8080
 
-# запуск стаба + фронтенда одной командой для проверки в браузере
+# запуск Rust-бэкенда + фронтенда одной командой для проверки в браузере
 dev:
     #!/usr/bin/env bash
     set -euo pipefail
     # освобождаем порты, если остались висящие процессы от прошлого запуска
-    for port in 4010 8080; do
+    for port in 3000 8080; do
         pids=$(lsof -ti tcp:$port 2>/dev/null || true)
         if [ -n "$pids" ]; then
             echo "  Порт $port занят (pid: $pids) — завершаю."
@@ -35,22 +43,22 @@ dev:
             sleep 1
         fi
     done
-    node tools/stub-server.mjs 4010 &
-    STUB_PID=$!
+    cd backend && cargo run &> /tmp/call-booking-backend.log &
+    BACKEND_PID=$!
     cd frontend && python3 -m http.server 8080 &> /dev/null &
     SERVE_PID=$!
-    trap 'kill $STUB_PID $SERVE_PID 2>/dev/null || true' EXIT
-    sleep 2
+    trap 'kill $BACKEND_PID $SERVE_PID 2>/dev/null || true' EXIT
+    sleep 3
     echo ''
     echo '  Гость:     http://127.0.0.1:8080'
     echo '  Владелец:  http://127.0.0.1:8080/admin.html  (токен: dev-token)'
     echo ''
-    echo '  В консоли браузера (для работы через стаб):'
-    echo '    localStorage.setItem("apiBase", "http://127.0.0.1:4010")'
+    echo '  В консоли браузера (для работы с Rust-бэкендом):'
+    echo '    localStorage.setItem("apiBase", "http://127.0.0.1:3000")'
     echo ''
     echo '  Ctrl+C — остановить оба процесса.'
     wait
 
-# smoke-тест клиента против стаба или реального бэкенда
+# smoke-тест клиента против Rust-бэкенда (или стаба)
 test-smoke:
-    node frontend/smoke-test.mjs http://127.0.0.1:4010
+    node frontend/smoke-test.mjs http://127.0.0.1:3000

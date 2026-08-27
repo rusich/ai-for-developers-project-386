@@ -27,6 +27,8 @@
 | Отмена бронирования | **Нет** (бронирование финально) |
 | Правило занятости | Unique по `start` в `bookings` → повторное бронирование того же времени → **409 Conflict** (даже для разных типов событий) |
 | Ошибки | Единый формат **RFC7807**: `{ type, title, status, detail }` |
+| Хранилище на шаге «Бэкенд» | **In-memory** (по заданию шага: БД не нужна, данные сбрасываются при перезапуске). Postgres + sqlx — отложено на этап деплоя |
+| Порт бэкенда | **3000** (axum default); dev-стаб на Node — порт 4010 (fallback) |
 | Деплой | Один Docker-контейнер: **axum раздаёт и API, и статику** (без отдельного nginx); postgres в docker-compose |
 
 ## Структура репозитория
@@ -47,10 +49,13 @@ frontend/                # vanilla HTML/JS (без сборщиков)
   js/app.js              # логика страницы гостя
   js/admin.js            # логика страницы владельца
   smoke-test.mjs         # smoke-тест API-клиента (node frontend/smoke-test.mjs [baseUrl] [token])
+backend/                 # Rust + axum (in-memory на этом шаге)
+  Cargo.toml
+  src/{main,lib,models,state,slots,auth,error,cors,handlers}.rs
+  tests/api.rs           # 10 интеграционных тестов + 4 юнит-теста слотов
 tools/                   # dev-инструменты, node_modules в .gitignore
-  stub-server.mjs        # stateful dev-стаб API по контракту (in-memory, слоты по правилам)
+  stub-server.mjs        # stateful dev-стаб API на Node (fallback, порт 4010)
   (prism-cli)            # stateless-мок, только для проверки схем OpenAPI
-backend/                 # (предстоит) Rust + axum
 docker/                  # (предстоит) Dockerfile, docker-compose.yml
 ```
 
@@ -59,11 +64,13 @@ docker/                  # (предстоит) Dockerfile, docker-compose.yml
 Основной способ — через `just` (justfile в корне, `just --list` покажет все команды):
 
 ```bash
-just dev            # stateful-стаб API (4010) + статика фронта (8080) одной командой, Ctrl+C гасит оба
-just stub           # только стаб API (node tools/stub-server.mjs, токен: dev-token)
+just dev            # Rust-бэкенд (3000) + статика фронта (8080) одной командой, Ctrl+C гасит оба
+just backend        # только Rust-бэкенд (cargo run, порт 3000)
+just test           # cargo test бэкенда (14 тестов)
+just stub           # только стаб API на Node (порт 4010, fallback, токен: dev-token)
 just mock           # Prism-мок (stateless, только для проверки схем OpenAPI)
 just serve          # только статика фронтенда
-just test-smoke     # smoke-тест API-клиента против стаба/бэкенда (23 проверки)
+just test-smoke     # smoke-тест API-клиента против Rust-бэкенда (23 проверки)
 just compile-spec   # перекомпиляция TypeSpec → spec/openapi/openapi.yaml
 just install        # npm install в spec/ и tools/
 ```
@@ -72,20 +79,26 @@ just install        # npm install в spec/ и tools/
 
 ```bash
 cd spec && npm run compile                          # перекомпиляция контракта
-node tools/stub-server.mjs 4010                     # stateful-стаб API (OWNER_TOKEN=... для смены токена)
+cd backend && cargo run                             # Rust-бэкенд (порт 3000, OWNER_TOKEN=... для смены токена)
+node tools/stub-server.mjs 4010                     # стаб API на Node (fallback, OWNER_TOKEN=...)
 cd frontend && python3 -m http.server 8080          # статика фронта
-node frontend/smoke-test.mjs [baseUrl] [token]      # smoke-тест (по умолчанию :4010, dev-token)
+node frontend/smoke-test.mjs [baseUrl] [token]      # smoke-тест (по умолчанию :3000, dev-token)
+cd backend && cargo test                            # тесты бэкенда
 ```
 
-## Как запустить фронтенд против стаба (dev без бэкенда)
+## Как запустить фронтенд против Rust-бэкенда (dev)
 
-1. `just dev` (или два терминала: `just stub` + `just serve`)
-2. В консоли браузера на странице: `localStorage.setItem('apiBase', 'http://127.0.0.1:4010')` и обновить страницу.
-3. Для admin.html: токен `dev-token` (стаб проверяет значение; задаётся через env `OWNER_TOKEN`).
+1. `just dev` (или два терминала: `just backend` + `just serve`)
+2. В консоли браузера на странице: `localStorage.setItem('apiBase', 'http://127.0.0.1:3000')` и обновить страницу.
+3. Для admin.html: токен `dev-token` (проверяется бэкендом; задаётся через env `OWNER_TOKEN`).
 
-Стаб (`tools/stub-server.mjs`) — stateful: хранит данные в памяти до перезапуска, генерирует слоты по правилам контракта (30 мин, 09:00–18:00 UTC, 14 дней), выдаёт настоящие 401/400/404/409. Prism оставлен только для проверки схем OpenAPI (он stateless и подставляет случайные строки — для ручной проверки в браузере не подходит).
+Стаб на Node (`tools/stub-server.mjs`, порт 4010) остаётся fallback'ом, если нужно проверить фронт без компиляции Rust.
 
-**CORS-заголовки в стабе обязательны**: фронт (8080) и API (4010) — разные origins. Стаб отвечает на preflight полным набором: эхо `Access-Control-Request-Headers`, `Access-Control-Allow-Private-Network: true` (Private Network Access в Chrome/Firefox), чистый 204. Без этого админка с заголовком `X-Owner-Token` блокируется браузером.
+**Rust-бэкенд** (`backend/`) — axum + in-memory хранилище, реализует контракт: слоты по правилам (30 мин, 09:00–18:00 UTC, 14 дней), бронирование с 409 на занятое время, owner-эндпоинты через `X-Owner-Token` = env `OWNER_TOKEN` (default `dev-token`), ошибки RFC7807, CORS-слой для dev (preflight 204 + `Access-Control-Allow-Private-Network: true`). Структура: `models` (DTO по контракту, camelCase), `slots` (генерация), `handlers` (8 эндпоинтов), `error` (RFC7807), `auth` (токен), `cors`, `state` (Mutex<Store>).
+
+Стаб на Node (`tools/stub-server.mjs`) — fallback-реализация того же контракта для проверки фронта без компиляции Rust. Prism оставлен только для проверки схем OpenAPI (stateless, подставляет случайные строки — для ручной проверки в браузере не подходит).
+
+**CORS-заголовки обязательны**: фронт (8080) и API (3000/4010) — разные origins. Бэкенд и стаб отвечают на preflight полным набором: эхо `Access-Control-Request-Headers`, `Access-Control-Allow-Private-Network: true` (Private Network Access в Chrome/Firefox), чистый 204. Без этого админка с заголовком `X-Owner-Token` блокируется браузером.
 
 В проде (Docker) axum раздаёт статику с того же origin — `apiBase` не нужен (по умолчанию пустая строка = тот же origin).
 
@@ -117,7 +130,7 @@ node frontend/smoke-test.mjs [baseUrl] [token]      # smoke-тест (по ум�
 
 - [x] Этап 0–1: TypeSpec-контракт написан и скомпилирован (`spec/`), покрытие сценариев проверено
 - [x] Этап 4: Frontend (`index.html` для гостя, `admin.html` для владельца), проверен против stateful-стаба (smoke-test.mjs: 23 ok)
-- [ ] Этап 2: БД и миграции (sqlx, таблицы `event_types`, `bookings` с unique по `start`)
-- [ ] Этап 3: Backend (axum: хендлеры, генерация слотов, X-Owner-Token middleware, ServeDir для статики)
-- [ ] Этап 5: Тесты (cargo test: генерация слотов, 409-конфликт, валидация, 401)
+- [x] Этап 3: Backend (axum + in-memory: 8 эндпоинтов, генерация слотов, X-Owner-Token, CORS, RFC7807)
+- [x] Этап 5: Тесты (cargo test: 4 юнит слотов + 10 интеграционных; smoke-test.mjs против Rust: 23 ok)
+- [ ] Этап 2: БД и миграции (sqlx, таблицы `event_types`, `bookings` с unique по `start`) — отложено на деплой
 - [ ] Этап 6: Деплой (Dockerfile multi-stage, docker-compose с postgres)
