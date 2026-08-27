@@ -27,7 +27,8 @@
 | Отмена бронирования | **Нет** (бронирование финально) |
 | Правило занятости | Unique по `start` в `bookings` → повторное бронирование того же времени → **409 Conflict** (даже для разных типов событий) |
 | Ошибки | Единый формат **RFC7807**: `{ type, title, status, detail }` |
-| Хранилище на шаге «Бэкенд» | **In-memory** (по заданию шага: БД не нужна, данные сбрасываются при перезапуске). Postgres + sqlx — отложено на этап деплоя |
+| Хранилище | **In-memory** (данные сбрасываются при перезапуске/деплое). Postgres + sqlx — **отложено**, начинать только когда задание явно потребует БД |
+| Переменные окружения | `PORT` (default 3000), `OWNER_TOKEN` (default dev-token), `STATIC_DIR` (default frontend) |
 | Порт бэкенда | **3000** (axum default); dev-стаб на Node — порт 4010 (fallback) |
 | Деплой | Один Docker-контейнер: **axum раздаёт и API, и статику** (без отдельного nginx); прод: Railway (деплой из GitHub по `docker/Dockerfile`, запуск по `PORT`, `OWNER_TOKEN=dev-token`); публичная ссылка в README |
 
@@ -49,9 +50,11 @@ frontend/                # vanilla HTML/JS (без сборщиков)
   js/app.js              # логика страницы гостя
   js/admin.js            # логика страницы владельца
   smoke-test.mjs         # smoke-тест API-клиента (node frontend/smoke-test.mjs [baseUrl] [token])
-backend/                 # Rust + axum (in-memory на этом шаге)
+backend/                 # Rust + axum (in-memory), раздаёт API + статику (build_app)
   Cargo.toml
   src/{main,lib,models,state,slots,auth,error,cors,handlers}.rs
+  # build_app(state, STATIC_DIR) — API + статика фронтенда (прод/Docker);
+  # build_router(state) — только API, без статики (используется в тестах)
   tests/api.rs           # 10 интеграционных тестов + 4 юнит-теста слотов
 tools/                   # dev-инструменты, node_modules в .gitignore
   stub-server.mjs        # stateful dev-стаб API на Node (fallback, порт 4010)
@@ -120,7 +123,7 @@ just e2e            # интеграционные e2e-тесты (4 теста 
 just dev            # бэкенд 3000 + фронт 8080, Ctrl+C гасит оба
 ```
 
-Продолжить с незакрытых пунктов чеклиста «Прогресс» (ниже): БД/миграции.
+Продолжить с незакрытых пунктов чеклиста «Прогресс» (ниже). БД/миграции (Этап 2) — **намеренно отложены**: начинать только когда конкретное задание курса явно потребует БД, не раньше.
 
 **Известный баг окружения (NixOS + rustup):** если `cargo build` падает с
 `ld-wrapper.sh: No such file or directory`, обёртка lld в rustup сломана. Заменить её:
@@ -163,13 +166,21 @@ PLAYWRIGHT_EXECUTABLE_PATH=/run/current-system/sw/bin/chromium npx playwright te
 
 Стаб на Node (`tools/stub-server.mjs`, порт 4010) остаётся fallback'ом, если нужно проверить фронт без компиляции Rust.
 
-**Rust-бэкенд** (`backend/`) — axum + in-memory хранилище, реализует контракт: слоты по правилам (30 мин, 09:00–18:00 UTC, 14 дней), бронирование с 409 на занятое время, owner-эндпоинты через `X-Owner-Token` = env `OWNER_TOKEN` (default `dev-token`), ошибки RFC7807, CORS-слой для dev (preflight 204 + `Access-Control-Allow-Private-Network: true`). Структура: `models` (DTO по контракту, camelCase), `slots` (генерация), `handlers` (8 эндпоинтов), `error` (RFC7807), `auth` (токен), `cors`, `state` (Mutex<Store>).
+**Rust-бэкенд** (`backend/`) — axum + in-memory хранилище, реализует контракт: слоты по правилам (30 мин, 09:00–18:00 UTC, 14 дней), бронирование с 409 на занятое время, owner-эндпоинты через `X-Owner-Token` = env `OWNER_TOKEN` (default `dev-token`), ошибки RFC7807, CORS-слой для dev (preflight 204 + `Access-Control-Allow-Private-Network: true`). В проде **`build_app`** раздаёт и API, и статику фронтенда из `STATIC_DIR` (default `frontend`) с того же origin — отдельный nginx не нужен; `build_router` — только API (используется в тестах). Структура: `models` (DTO по контракту, camelCase), `slots` (генерация), `handlers` (8 эндпоинтов), `error` (RFC7807), `auth` (токен), `cors`, `state` (Mutex<Store>).
 
 Стаб на Node (`tools/stub-server.mjs`) — fallback-реализация того же контракта для проверки фронта без компиляции Rust. Prism оставлен только для проверки схем OpenAPI (stateless, подставляет случайные строки — для ручной проверки в браузере не подходит).
 
 **CORS-заголовки обязательны**: фронт (8080) и API (3000/4010) — разные origins. Бэкенд и стаб отвечают на preflight полным набором: эхо `Access-Control-Request-Headers`, `Access-Control-Allow-Private-Network: true` (Private Network Access в Chrome/Firefox), чистый 204. Без этого админка с заголовком `X-Owner-Token` блокируется браузером.
 
 В проде (Docker) axum раздаёт статику с того же origin — `apiBase` не нужен (по умолчанию пустая строка = тот же origin).
+
+## Продакшн (Railway)
+
+- **Публичная ссылка:** https://ai-for-developers-project-386-production-6607.up.railway.app (гость), `/admin.html` (владелец, токен `dev-token`)
+- Деплой автоматический: push в `main` → GitHub → Railway собирает по `docker/Dockerfile` (multi-stage), запуск по `PORT`, `OWNER_TOKEN=dev-token`.
+- Railway: проект `call-booking`, сервис `ai-for-developers-project-386`. Railway MCP подключён в окружении (глобальный `opencode.json`): логи/деплои/статус — через MCP-инструменты `railway_*`.
+- Сеть пользователя блокирует домен без VPN — для проверок прод-ссылки включать VPN.
+- Данные in-memory: каждый деплой сбрасывает типы событий и бронирования.
 
 ## API-контракт (сводка)
 
@@ -192,7 +203,7 @@ PLAYWRIGHT_EXECUTABLE_PATH=/run/current-system/sw/bin/chromium npx playwright te
 2. TypeSpec v1.15: декораторы с аргументами требуют скобок (`@header("X-Owner-Token")`), объектные аргументы — через `#{}` (`@service(#{title: ...})`), версия API — через `@info(#{version: ...})` из `@typespec/openapi`.
 3. Список-эндпоинты возвращают `200` с `[]` при пустом результате (НЕ 404).
 4. Реализация фронта и бэка — строго по контракту, без заглядывания в реализацию другой части.
-5. Docker локально у пользователя пока не установлен — Docker-этап отложен; проверки через cargo/npm локально.
+5. Docker локально установлен (`just docker-build` / `just docker-run`); прод-деплой — Railway из GitHub по `docker/Dockerfile` (см. «Продакшн (Railway)»).
 6. Язык общения с пользователем — **русский**.
 7. **Все коммиты — только по Conventional Commits** (см. «Коммиты и релизы» ниже), в том числе коммиты, которые делает агент.
 
@@ -223,4 +234,4 @@ PLAYWRIGHT_EXECUTABLE_PATH=/run/current-system/sw/bin/chromium npx playwright te
 - [x] Этап 5: Тесты (cargo test: 4 юнит слотов + 10 интеграционных; smoke-test.mjs против Rust: 23 ok)
 - [x] Этап 7: Интеграционные e2e (Playwright, реальный Chromium, основной сценарий бронирования) + CI + release-please
 - [x] Этап 6: Деплой (Dockerfile multi-stage в `docker/`, axum раздаёт API+статику, запуск по `PORT`) — задеплоено на Railway, ссылка в README
-- [ ] Этап 2: БД и миграции (sqlx, таблицы `event_types`, `bookings` с unique по `start`) — отложено на деплой
+- [ ] Этап 2: БД и миграции (sqlx, таблицы `event_types`, `bookings` с unique по `start`) — **отложено**, начинать только когда задание курса явно потребует БД
