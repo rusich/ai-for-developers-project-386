@@ -91,6 +91,14 @@ dev:
 test-smoke:
     node frontend/smoke-test.mjs http://127.0.0.1:3000
 
+# сборка Docker-образа (context = корень репозитория)
+docker-build:
+    docker build -f docker/Dockerfile -t call-booking .
+
+# запуск контейнера (порт 3000, токен dev-token)
+docker-run:
+    docker run --rm -p 3000:3000 -e OWNER_TOKEN=dev-token call-booking
+
 # установка e2e-зависимостей + браузера Chromium для Playwright
 install-e2e:
     cd e2e && npm install && npx playwright install chromium
