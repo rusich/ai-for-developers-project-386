@@ -5,6 +5,7 @@
 install:
     cd spec && npm install
     cd tools && npm install
+    cd e2e && npm install
 
 # перекомпиляция контракта TypeSpec → OpenAPI
 compile-spec:
@@ -89,3 +90,27 @@ dev:
 # smoke-тест клиента против Rust-бэкенда (или стаба)
 test-smoke:
     node frontend/smoke-test.mjs http://127.0.0.1:3000
+
+# установка e2e-зависимостей + браузера Chromium для Playwright
+install-e2e:
+    cd e2e && npm install && npx playwright install chromium
+
+# интеграционные e2e-тесты (Playwright): собирает бэкенд, поднимает 3000+8080
+# и гоняет сценарии в реальном браузере
+e2e:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    for port in 3000 8080; do
+        pids=$(lsof -ti tcp:$port 2>/dev/null || true)
+        if [ -n "$pids" ]; then
+            echo "  Порт $port занят (pid: $pids) — завершаю."
+            kill $pids 2>/dev/null || true
+            sleep 1
+        fi
+    done
+    (cd backend && cargo build)
+    # NixOS: Playwright-браузер без системных библиотек не стартует — берём системный Chromium
+    if [ -x /run/current-system/sw/bin/chromium ]; then
+        export PLAYWRIGHT_EXECUTABLE_PATH="${PLAYWRIGHT_EXECUTABLE_PATH:-/run/current-system/sw/bin/chromium}"
+    fi
+    cd e2e && npx playwright test
