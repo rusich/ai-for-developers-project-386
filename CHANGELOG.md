@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.3.0](https://github.com/rusich/ai-for-developers-project-386/compare/v0.2.1...v0.3.0) (2026-08-27)
+
+
+### Features
+
+* add Docker deployment with axum-served static ([99272f2](https://github.com/rusich/ai-for-developers-project-386/commit/99272f27faf63d347c0f755e149ced40074acb66))
+
+
+### Bug Fixes
+
+* make e2e slot tests deterministic and time-independent ([fbc965e](https://github.com/rusich/ai-for-developers-project-386/commit/fbc965ebd3410de866d1bfaed255d867705ac945))
+
+
+### Documentation
+
+* add public link and Docker docs, mark deploy step done ([8a20b28](https://github.com/rusich/ai-for-developers-project-386/commit/8a20b28aa0e586c665a68eca66fb5953861ae4c6))
+* update AGENTS.md for deployment state and env vars ([5cda0ec](https://github.com/rusich/ai-for-developers-project-386/commit/5cda0ec8a684d16905f63132b434d8876445bce2))
+
 ## [0.2.1](https://github.com/rusich/ai-for-developers-project-386/compare/v0.2.0...v0.2.1) (2026-08-27)
 
 
