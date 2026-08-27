@@ -85,6 +85,8 @@ node frontend/smoke-test.mjs [baseUrl] [token]      # smoke-тест (по ум�
 
 Стаб (`tools/stub-server.mjs`) — stateful: хранит данные в памяти до перезапуска, генерирует слоты по правилам контракта (30 мин, 09:00–18:00 UTC, 14 дней), выдаёт настоящие 401/400/404/409. Prism оставлен только для проверки схем OpenAPI (он stateless и подставляет случайные строки — для ручной проверки в браузере не подходит).
 
+**CORS-заголовки в стабе обязательны**: фронт (8080) и API (4010) — разные origins. Стаб отвечает на preflight полным набором: эхо `Access-Control-Request-Headers`, `Access-Control-Allow-Private-Network: true` (Private Network Access в Chrome/Firefox), чистый 204. Без этого админка с заголовком `X-Owner-Token` блокируется браузером.
+
 В проде (Docker) axum раздаёт статику с того же origin — `apiBase` не нужен (по умолчанию пустая строка = тот же origin).
 
 ## API-контракт (сводка)

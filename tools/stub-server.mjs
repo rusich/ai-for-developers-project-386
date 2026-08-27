@@ -84,15 +84,32 @@ function findSlot(startIso) {
 
 // ── Утилиты ответа ───────────────────────────────────────────
 
-function sendJson(res, status, data) {
+function sendJson(res, status, data, extraHeaders = {}) {
   const body = data === null ? '' : JSON.stringify(data);
   res.writeHead(status, {
     'Content-Type': 'application/json',
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Headers': 'Content-Type, X-Owner-Token',
     'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+    'Access-Control-Allow-Private-Network': 'true',
+    ...extraHeaders,
   });
   res.end(body);
+}
+
+function sendCorsPreflight(req, res) {
+  const requestedHeaders = req.headers['access-control-request-headers'];
+  const allowedHeaders = requestedHeaders
+    ? `Content-Type, X-Owner-Token, ${requestedHeaders}`
+    : 'Content-Type, X-Owner-Token';
+  res.writeHead(204, {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Headers': allowedHeaders,
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+    'Access-Control-Allow-Private-Network': 'true',
+    'Vary': 'Origin, Access-Control-Request-Headers',
+  });
+  res.end();
 }
 
 function sendProblem(res, status, title, detail) {
@@ -140,7 +157,7 @@ async function handle(req, res) {
 
   // CORS preflight
   if (req.method === 'OPTIONS') {
-    return sendJson(res, 204, null);
+    return sendCorsPreflight(req, res);
   }
 
   // /api/event-types
